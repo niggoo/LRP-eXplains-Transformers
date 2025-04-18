@@ -4,17 +4,25 @@ from torch.nn import Dropout
 import transformers.models.gemma3.modeling_gemma3 as modeling_gemma3
 from transformers.models.gemma3.modeling_gemma3 import Gemma3MLP, Gemma3RMSNorm
 
-# Import the generic LXT patch functions and specific forward implementations
 from lxt.efficient.patches import (
     patch_method,
     patch_attention,
     patch_cp_attention,
-    rms_norm_forward,
+    # rms_norm_forward, # We don't need the generic one for Gemma3RMSNorm
     gated_mlp_forward,
     cp_gated_mlp_forward,
     dropout_forward,
 )
+# Import or define gemma3_rms_norm_forward_lxt as shown above
+# lxt/efficient/models/gemma3.py
+# ... other imports ...
+from lxt.efficient.rules import stop_gradient
+import torch
+import torch.nn as nn # Make sure nn is imported if not already
 
+# ... your existing attnLRP/cp_LRP dictionaries might be here ...
+
+# --- NEW: Custom LXT Forward for Gemma3RMSNorm ---
 def gemma3_rms_norm_forward_lxt(self: nn.Module, x: torch.Tensor) -> torch.Tensor:
     """
     Custom forward pass for Gemma3RMSNorm compatible with LXT.
@@ -41,20 +49,22 @@ def gemma3_rms_norm_forward_lxt(self: nn.Module, x: torch.Tensor) -> torch.Tenso
     return output.to(input_dtype) # Cast back to original dtype
 
 
-
+# --- END NEW ---
 attnLRP = {
     Gemma3MLP: partial(patch_method, gated_mlp_forward),
-    # *** Use the custom patch function for Gemma3RMSNorm ***
-    Gemma3RMSNorm: partial(patch_method, gemma3_rms_norm_forward),
-    Dropout: partial(patch_method, dropout_forward), # Keep standard dropout patch
-    modeling_gemma3: patch_attention, # Keep standard attention patch
+
+    # --- CHANGE: Use the custom forward pass ---
+    Gemma3RMSNorm: partial(patch_method, gemma3_rms_norm_forward_lxt),
+    # --- END CHANGE ---
+
+    Dropout: partial(patch_method, dropout_forward),
+    modeling_gemma3: patch_attention,
 }
 
-# Define the LRP patches compatible with gradient checkpointing
+# Update cp_LRP similarly if defined
 cp_LRP = {
-    Gemma3MLP: partial(patch_method, cp_gated_mlp_forward),
-    # *** Use the custom patch function for Gemma3RMSNorm ***
-    Gemma3RMSNorm: partial(patch_method, gemma3_rms_norm_forward),
-    Dropout: partial(patch_method, dropout_forward), # Keep standard dropout patch
-    modeling_gemma3: patch_cp_attention, # Keep standard CP attention patch
+     Gemma3MLP: partial(patch_method, cp_gated_mlp_forward),
+     Gemma3RMSNorm: partial(patch_method, gemma3_rms_norm_forward_lxt), # Use custom here too
+     Dropout: partial(patch_method, dropout_forward),
+     modeling_gemma3: patch_cp_attention,
 }
