@@ -5,6 +5,7 @@ import lxt.efficient.models.gpt2 as gpt2
 import lxt.efficient.models.vit_torch as vit_torch
 import lxt.efficient.models.gemma3 as gemma3
 import lxt.efficient.models.phi3 as phi3
+import lxt.efficient.models.roberta as roberta
 
 
 DEFAULT_MAP = {
@@ -17,6 +18,7 @@ DEFAULT_MAP = {
     gemma3.modeling_gemma3: gemma3.attnLRP,
     phi3.modeling_phi3: phi3.attnLRP,
 
+    roberta.modeling_roberta: roberta.attnLRP,
 }
 
 def get_default_map(module):
